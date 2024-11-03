@@ -1,0 +1,12 @@
+#!/bin/bash
+# Check if the file does not exist
+if [ ! -e "utils/cvemap" ]; then
+	wget "https://github.com/projectdiscovery/cvemap/releases/download/v0.0.7/cvemap_0.0.7_linux_amd64.zip"
+	unzip "cvemap_0.0.7_linux_amd64.zip"
+	rm "README.md"
+	rm "LICENSE"
+	mv "cvemap_0.0.7_linux_amd64.zip" ".cvemap_0.0.7_linux_amd64.zip"
+    else
+	        echo "sourcing... "
+fi
+export PATH=$PATH:$(pwd)/utils
