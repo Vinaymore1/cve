@@ -1,6 +1,39 @@
 const { createUnifiedModel } = require('../models/CVE');
+const { createCVEModel } = require('../models/CVE');
 const semver = require('semver');
 
+const getUniqueVendors = async (db) => {
+    const cveCollection = createCVEModel(db);
+    const cveRecords = await cveCollection.find({}).toArray();
+
+    const vendors = new Set();
+
+    cveRecords.forEach(record => {
+            if (record.cpe_data) {
+            record.cpe_data.forEach(affected => {
+                    if (affected.vendor) {
+                    //vendors.add(affected.vendor.toLowerCase()); // Normalize to lowercase
+                    vendors.add(affected.vendor.toLowerCase());
+                    }
+                    });
+            }
+            });
+
+    //console.log("Unique vendors:" + Array.from(vendors)) ;
+    return Array.from(vendors);
+};
+
+// Function to check if the given vendor exists in the CVE records
+const vendorExistsInCVE = async (db, vendorName) => {
+    const uniqueVendors = await getUniqueVendors(db);
+    return uniqueVendors.some(vendor => vendor.includes(vendorName.toLowerCase()));
+};
+
+// Example of a route handler that uses this function
+const checkVendor = async (db, vendorName) => {
+    const exists = await vendorExistsInCVE(db, vendorName);
+    return exists;
+};
 const filterByCVEId = async (db, cveId) => {
     const unifiedCollection = createUnifiedModel(db);
     return await unifiedCollection.findOne({ cve_id: cveId });
@@ -772,6 +805,10 @@ const getFilteredVendorVulnerabilities = async (db, vendor, year, page = 1, limi
 };
 
 
+// create a function for getting the unique vendors from the database and return them as a response to the client alphabetically sorted in ascending order 
+// (i.e., from A to Z).
+
+
 module.exports = {
     filterByCVEId,
     generalSearch,
@@ -783,6 +820,8 @@ module.exports = {
     getProductVersionVulnerabilities,
     getVersionDetails,
     getFilteredProductVulnerabilities,
-    getFilteredVendorVulnerabilities
+    getFilteredVendorVulnerabilities,
+    getUniqueVendors,
+    vendorExistsInCVE,
+    checkVendor
 };
-

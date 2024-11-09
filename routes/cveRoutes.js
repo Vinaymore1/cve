@@ -11,13 +11,23 @@ const {
     getProductVersionVulnerabilities,
     getVersionDetails,
     getFilteredProductVulnerabilities,
-    getFilteredVendorVulnerabilities
+    getUniqueVendors
 } = require('../controllers/cveController'); 
 const connectDB = require('../config/db'); 
 const authMiddleware = require('../server/middleware/auth'); 
 
+// Add route to get unique vendors 
+router.get('/vendors', async (req, res) => {
+    try {
+        const db = await connectDB();
+        const vendors = await getUniqueVendors(db);
+        res.json(vendors);
+    } catch (err) {
+        console.error(err); 
+        res.status(500).json({ message: 'Server error', error: err.message });
+    }
+});
 // Route to filter by CVE ID (protected route)
-// 
 router.get('/cveid/:id' , async (req, res) => {
     try {
         const db = await connectDB();

@@ -9,6 +9,7 @@ const connectDB = require('./config/db');
 const cveRoutes = require('./routes/cveRoutes');
 const cron = require('node-cron'); // Import cron
 const authRoutes = require('./server/api/auth'); 
+const watchlistRoutes = require('./routes/watchlistRoutes');
 const cors = require('cors');
 
 const app = express();
@@ -25,6 +26,7 @@ app.use(cors({
 
         app.use('/api/cve', cveRoutes); 
         app.use('/api/auth', authRoutes); 
+        app.use('/api', watchlistRoutes); 
 
         // await cloneOrPullRepo();
         // const changedFiles = await checkGitDiff();
