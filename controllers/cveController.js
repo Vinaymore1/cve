@@ -180,6 +180,44 @@ const getExploitedVulnerabilitiesStats = async (db) => {
 
 
 
+// const getCvesByVendorAndYear = async (db, vendor, year, page = 1, limit = 20) => {
+//     const unifiedCollection = createUnifiedModel(db);
+    
+//     // Normalize vendor name for searching
+//     const normalizedVendor = vendor.replace(/\s+/g, '').toLowerCase();
+
+//     // Pagination logic
+//     const skip = (page - 1) * limit;
+
+//     const cves = await unifiedCollection.aggregate([
+//         { $unwind: '$cpe' },  // Unwind the cpe array
+//         {
+//             $addFields: {
+//                 normalizedVendor: {
+//                     $replaceAll: {
+//                         input: { $toLower: { $replaceAll: { input: '$cpe.vendor', find: ' ', replacement: '' } } },
+//                         find: '',
+//                         replacement: ''
+//                     }
+//                 }
+//             }
+//         },
+//         { $match: { normalizedVendor: normalizedVendor } },  // Match the normalized vendor name
+//         { $match: { published_at: { $gte: new Date(`${year}-01-01`), $lt: new Date(`${year + 1}-01-01`) } } }, // Match the specified year
+//         {
+//             $group: {
+//                 _id: '$cve_id',
+//                 description: { $first: '$description' }  // Take the first description found
+//             }
+//         },
+//         { $project: { cve_id: '$_id', description: 1 } },  // Project the final fields
+//         { $skip: skip },  // Skip for pagination
+//         { $limit: limit }  // Limit results
+//     ]).toArray();
+
+//     return cves;
+// };
+
 const getCvesByVendorAndYear = async (db, vendor, year, page = 1, limit = 20) => {
     const unifiedCollection = createUnifiedModel(db);
     
@@ -207,17 +245,29 @@ const getCvesByVendorAndYear = async (db, vendor, year, page = 1, limit = 20) =>
         {
             $group: {
                 _id: '$cve_id',
-                description: { $first: '$description' }  // Take the first description found
+                description: { $first: '$description' },
+                cvss_score: { $first: '$cvss_score' },
+                epss_score: { $first: '$epss.epss_score' },
+                published_at: { $first: '$published_at' },
+                updated_at: { $first: '$updated_at' }
             }
         },
-        { $project: { cve_id: '$_id', description: 1 } },  // Project the final fields
+        { 
+            $project: { 
+                cve_id: '$_id', 
+                description: 1,
+                max_cvss: '$cvss_score',
+                epss_score: '$epss_score',
+                published: '$published_at',
+                updated: '$updated_at'
+            }
+        },  // Project the final fields
         { $skip: skip },  // Skip for pagination
         { $limit: limit }  // Limit results
     ]).toArray();
 
     return cves;
 };
-
 
 
 const generalSearch = async (db, query) => {
@@ -719,7 +769,6 @@ const getFilteredProductVulnerabilities = async (db, product, version, page = 1,
 };
 
 
-
 const getFilteredVendorVulnerabilities = async (db, vendor, year, page = 1, limit = 20, filters = {}) => {
     const unifiedCollection = createUnifiedModel(db);
     const skip = (page - 1) * limit;
@@ -807,6 +856,118 @@ const getFilteredVendorVulnerabilities = async (db, vendor, year, page = 1, limi
 
 // create a function for getting the unique vendors from the database and return them as a response to the client alphabetically sorted in ascending order 
 // (i.e., from A to Z).
+// New functions to add to your existing code
+
+const getAlphabeticalVendors = async (db, letter, page = 1, limit = 20) => {
+    const unifiedCollection = createUnifiedModel(db);
+    const skip = (page - 1) * limit;
+    
+    // Create match condition based on whether a letter is provided
+    const matchCondition = letter ? 
+        { 'cpe.vendor': { $regex: `^${letter}`, $options: 'i' } } : 
+        {};
+
+    // Get total count for pagination
+    const totalCount = await unifiedCollection.aggregate([
+        { $unwind: '$cpe' },
+        { $match: matchCondition },
+        { $group: { _id: '$cpe.vendor' } },
+        { $count: 'total' }
+    ]).toArray();
+
+    const total = totalCount[0]?.total || 0;
+
+    // Get paginated vendors with product count
+    const vendors = await unifiedCollection.aggregate([
+        { $unwind: '$cpe' },
+        { $match: matchCondition },
+        {
+            $group: {
+                _id: '$cpe.vendor',
+                vulnerabilityCount: { $sum: 1 },
+                latestUpdate: { $max: '$updated_at' },
+                uniqueProducts: { $addToSet: '$cpe.product' }
+            }
+        },
+        { $sort: { '_id': 1 } },
+        { $skip: skip },
+        { $limit: limit },
+        {
+            $project: {
+                vendor: '$_id',
+                vulnerabilityCount: 1,
+                lastUpdated: '$latestUpdate',
+                productCount: { $size: '$uniqueProducts' },
+                _id: 0
+            }
+        }
+    ]).toArray();
+
+    return {
+        vendors,
+        pagination: {
+            total,
+            page,
+            limit,
+            pages: Math.ceil(total / limit)
+        }
+    };
+};
+const getAlphabeticalProducts = async (db, letter, page = 1, limit = 20) => {
+    const unifiedCollection = createUnifiedModel(db);
+    const skip = (page - 1) * limit;
+    
+    // Create match condition based on whether a letter is provided
+    const matchCondition = letter ? 
+        { 'cpe.product': { $regex: `^${letter}`, $options: 'i' } } : 
+        {};
+
+    // Get total count for pagination
+    const totalCount = await unifiedCollection.aggregate([
+        { $unwind: '$cpe' },
+        { $match: matchCondition },
+        { $group: { _id: '$cpe.product' } },
+        { $count: 'total' }
+    ]).toArray();
+
+    const total = totalCount[0]?.total || 0;
+
+    // Get paginated products
+    const products = await unifiedCollection.aggregate([
+        { $unwind: '$cpe' },
+        { $match: matchCondition },
+        {
+            $group: {
+                _id: '$cpe.product',
+                vendor: { $first: '$cpe.vendor' },
+                count: { $sum: 1 },
+                latestUpdate: { $max: '$updated_at' }
+            }
+        },
+        { $sort: { '_id': 1 } },
+        { $skip: skip },
+        { $limit: limit },
+        {
+            $project: {
+                product: '$_id',
+                vendor: 1,
+                vulnerabilityCount: '$count',
+                lastUpdated: '$latestUpdate',
+                _id: 0
+            }
+        }
+    ]).toArray();
+
+    return {
+        products,
+        pagination: {
+            total,
+            page,
+            limit,
+            pages: Math.ceil(total / limit)
+        }
+    };
+};
 
 
 module.exports = {
@@ -823,5 +984,7 @@ module.exports = {
     getFilteredVendorVulnerabilities,
     getUniqueVendors,
     vendorExistsInCVE,
-    checkVendor
+    checkVendor,
+    getAlphabeticalVendors,
+    getAlphabeticalProducts
 };

@@ -10,8 +10,11 @@ const {
     getProductVersions,
     getProductVersionVulnerabilities,
     getVersionDetails,
+    getFilteredVendorVulnerabilities,
     getFilteredProductVulnerabilities,
-    getUniqueVendors
+    getUniqueVendors,
+    getAlphabeticalVendors,
+    getAlphabeticalProducts
 } = require('../controllers/cveController'); 
 const connectDB = require('../config/db'); 
 const authMiddleware = require('../server/middleware/auth'); 
@@ -230,6 +233,37 @@ router.get('/vendor/:vendor/year/:year/filtered', async (req, res) => {
     } catch (err) {
         console.error(err);
         res.status(500).json({ message: 'Server error', error: err.message });
+    }
+});
+
+
+router.get('/vendors/alphabetical/:letter?', async (req, res) => {
+    try {
+        const { letter } = req.params;
+        const db = await connectDB();
+        const page = parseInt(req.query.page) || 1;
+        const limit = parseInt(req.query.limit) || 20;
+        
+        const vendors = await getAlphabeticalVendors(db, letter, page, limit);
+        res.json(vendors);
+    } catch (error) {
+        console.error('Error fetching vendors:', error);
+        res.status(500).json({ error: 'Internal server error' });
+    }
+});
+
+router.get('/products/alphabetical/:letter?', async (req, res) => {
+    try {
+        const { letter } = req.params;
+        const db = await connectDB();
+        const page = parseInt(req.query.page) || 1;
+        const limit = parseInt(req.query.limit) || 20;
+        
+        const products = await getAlphabeticalProducts(db, letter, page, limit);
+        res.json(products);
+    } catch (error) {
+        console.error('Error fetching products:', error);
+        res.status(500).json({ error: 'Internal server error' });
     }
 });
 
